@@ -35,7 +35,7 @@
   .container {
     display: grid;
     grid-template-columns: 280px 1fr 280px;
-    grid-template-rows: 40px 1fr 180px;
+    grid-template-rows: 40px minmax(0, 1fr) 180px;
     grid-template-areas:
       "header header header"
       "left video right"
@@ -113,7 +113,9 @@
     padding: 8px;
     display: grid;
     grid-template-columns: 1fr 1fr;
+    grid-template-rows: minmax(0, 1fr);
     gap: 8px;
+    min-height: 0;
   }
 
   .graph-box {
@@ -123,12 +125,12 @@
     flex-direction: column;
     background: #000;
     min-width: 0;
+    min-height: 0;
   }
 
   .graph-box canvas {
     flex: 1;
     width: 100%;
-    min-height: 80px;
     display: block;
   }
 
@@ -478,6 +480,126 @@
     font-style: italic;
   }
 
+  #sessionSummary {
+    position: absolute;
+    inset: 0;
+    z-index: 25;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    pointer-events: auto;
+  }
+
+  .summary-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    cursor: pointer;
+  }
+
+  .summary-card {
+    position: relative;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--cyan);
+    padding: 14px 18px;
+    min-width: 340px;
+    max-width: 90%;
+    font-family: inherit;
+    color: var(--text);
+    box-shadow: 0 0 30px rgba(6, 182, 212, 0.3), 0 10px 30px rgba(0, 0, 0, 0.6);
+  }
+
+  .summary-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 8px;
+    margin-bottom: 10px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .summary-title {
+    color: var(--cyan);
+    font-size: 11px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .summary-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-family: inherit;
+    font-size: 16px;
+    line-height: 1;
+    padding: 0 4px;
+    cursor: pointer;
+  }
+
+  .summary-close:hover { color: var(--text); }
+
+  .summary-body .panel-row { font-size: 11px; }
+
+  .summary-bar-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 3px;
+    font-size: 10px;
+    color: var(--muted);
+  }
+
+  .summary-bar-label {
+    width: 72px;
+    letter-spacing: 1px;
+  }
+
+  .summary-bar-track {
+    flex: 1;
+    height: 8px;
+    background: #000;
+    border: 1px solid var(--border);
+    position: relative;
+  }
+
+  .summary-bar-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 0;
+    transition: width 0.2s ease;
+  }
+
+  .summary-bar-pct {
+    width: 40px;
+    text-align: right;
+    color: var(--text);
+  }
+
+  .summary-divider {
+    border-top: 1px dashed var(--border);
+    margin: 8px 0;
+  }
+
+  .summary-empty {
+    color: var(--muted);
+    font-size: 10px;
+    letter-spacing: 1px;
+    text-align: center;
+    padding: 6px 0;
+  }
+
+  .summary-footer {
+    margin-top: 10px;
+    padding-top: 8px;
+    border-top: 1px solid var(--border);
+    color: var(--red);
+    font-size: 9px;
+    letter-spacing: 2px;
+    text-align: right;
+  }
+
   @media (max-width: 900px) {
     body { overflow: auto; }
 
@@ -515,6 +637,12 @@
     #explainCard {
       max-width: 88vw;
       font-size: 10px;
+    }
+
+    .summary-card {
+      min-width: 0;
+      width: 88vw;
+      padding: 12px 14px;
     }
   }
 </style>
@@ -597,6 +725,18 @@
     </div>
 
     <button class="start-btn explain-target" data-explain="control-btn" id="controlBtn">▶ START WEBCAM</button>
+
+    <div id="sessionSummary" hidden>
+      <div class="summary-backdrop" id="summaryBackdrop"></div>
+      <div class="summary-card explain-target" data-explain="session-summary">
+        <div class="summary-header">
+          <div class="summary-title">◤ SESSION SUMMARY</div>
+          <button type="button" class="summary-close" id="summaryClose" aria-label="Close summary">×</button>
+        </div>
+        <div class="summary-body" id="summaryBody"></div>
+        <div class="summary-footer">NOT FOR CLINICAL USE</div>
+      </div>
+    </div>
   </div>
 
   <div class="right-panel">
@@ -1060,8 +1200,20 @@
         <p>Starts or stops the webcam. The browser asks for permission the first time. We request 1280×720 at 30 fps; if that fails, we fall back to whatever the browser gives us.</p>
         <p>Stop always tears down the stream so the camera indicator turns off.</p>
       `
+    },
+
+    "session-summary": {
+      title: "Session Summary",
+      body: () => `
+        <p>Appears when you press STOP after a session of at least <strong>${SESSION_SUMMARY_MIN_SECONDS}s</strong>. Each stat is sampled once per metric tick (every ${CONFIG.metricIntervalMs} ms) while capture was running.</p>
+        <p><strong>Avg BPM</strong> averages the smoothed BPM (alpha ${CONFIG.bpmSmoothingAlpha}) across ticks where a pulse was resolvable. <strong>Avg resp</strong> averages reported respiration rate across ticks where a rate was produced.</p>
+        <p><strong>Quality %</strong> is the share of ticks in each state; <code>no_signal</code> is grouped under <em>collecting</em>. <strong>Dominant</strong> is the frequency-scan peak averaged across non-<code>no_signal</code> ticks.</p>
+        <p><em>A descriptive report of what the demo saw — not a medical reading.</em></p>
+      `
     }
   };
+
+  const SESSION_SUMMARY_MIN_SECONDS = 60;
 
   let explainOpenKey = null;
   let explainOpenExtra = null;
@@ -1098,9 +1250,25 @@
       pulse: null,
       resp: null,
       frequencyBins: new Array(CONFIG.frequencyBins).fill(0),
-      peakIndex: -1
-    }
+      peakIndex: -1,
+      peakHz: null
+    },
+    sessionStats: newSessionStats()
   };
+
+  function newSessionStats() {
+    return {
+      startedAt: 0,
+      bpmSum: 0,
+      bpmCount: 0,
+      respSum: 0,
+      respCount: 0,
+      qualityCounts: { collecting: 0, weak: 0, unstable: 0, usable: 0 },
+      qualityTotal: 0,
+      peakHzSum: 0,
+      peakHzCount: 0
+    };
+  }
 
   function cacheDom() {
     dom.video = document.getElementById("video");
@@ -1158,6 +1326,11 @@
     dom.explainHint = document.getElementById("explainHint");
     dom.explainHintClose = dom.explainHint.querySelector("button");
 
+    dom.sessionSummary = document.getElementById("sessionSummary");
+    dom.summaryBody = document.getElementById("summaryBody");
+    dom.summaryClose = document.getElementById("summaryClose");
+    dom.summaryBackdrop = document.getElementById("summaryBackdrop");
+
     dom.roiStatus = {
       forehead: document.getElementById("sig-forehead"),
       nose: document.getElementById("sig-nose"),
@@ -1176,8 +1349,20 @@
     resetUi();
     dom.controlBtn.addEventListener("click", handleControlClick);
     initExplain();
+    initSessionSummary();
     log("System initialized");
     log("Awaiting camera activation", "warn");
+  }
+
+  function initSessionSummary() {
+    dom.summaryClose.addEventListener("click", event => {
+      event.stopPropagation();
+      hideSessionSummary();
+    });
+    dom.summaryBackdrop.addEventListener("click", hideSessionSummary);
+    document.addEventListener("keydown", event => {
+      if (event.key === "Escape" && !dom.sessionSummary.hidden) hideSessionSummary();
+    });
   }
 
   function createSessionId() {
@@ -1202,6 +1387,7 @@
     dom.controlBtn.disabled = true;
     dom.controlBtn.textContent = "REQUESTING CAMERA...";
     setStatus("REQUESTING CAMERA");
+    hideSessionSummary();
     resetSamples();
     resetUi();
 
@@ -1240,6 +1426,7 @@
       state.lastRenderAt = 0;
       state.lastFpsAt = performance.now();
       state.fpsFrames = 0;
+      state.sessionStats.startedAt = performance.now();
 
       setRunningUi(true);
       setRoiStatus("ACTIVE", "green");
@@ -1309,8 +1496,14 @@
     });
   }
 
-  function stopCapture() {
+  function stopCapture(options) {
+    const showSummary = !options || options.showSummary !== false;
     const hadSession = state.running || state.starting || state.stream;
+    const startedAt = state.sessionStats.startedAt;
+    const duration = startedAt > 0 ? (performance.now() - startedAt) / 1000 : 0;
+    const statsSnapshot = showSummary && hadSession && duration >= SESSION_SUMMARY_MIN_SECONDS
+      ? snapshotSessionStats(duration)
+      : null;
 
     state.startToken++;
     state.running = false;
@@ -1337,6 +1530,29 @@
     resetUi();
 
     if (hadSession) log("Capture stopped and resources released", "warn");
+
+    if (statsSnapshot) {
+      showSessionSummary(statsSnapshot);
+      log(`Session summary shown (${statsSnapshot.durationSec.toFixed(0)}s)`);
+    }
+  }
+
+  function snapshotSessionStats(durationSec) {
+    const s = state.sessionStats;
+    const qualityPct = {};
+    for (const key of Object.keys(s.qualityCounts)) {
+      qualityPct[key] = s.qualityTotal > 0
+        ? (s.qualityCounts[key] / s.qualityTotal) * 100
+        : 0;
+    }
+    return {
+      durationSec,
+      tickCount: s.qualityTotal,
+      avgBpm: s.bpmCount > 0 ? s.bpmSum / s.bpmCount : null,
+      avgResp: s.respCount > 0 ? s.respSum / s.respCount : null,
+      dominantHz: s.peakHzCount > 0 ? s.peakHzSum / s.peakHzCount : null,
+      qualityPct
+    };
   }
 
   function stopStream(stream) {
@@ -1379,6 +1595,8 @@
     state.metrics.resp = null;
     state.metrics.frequencyBins = new Array(CONFIG.frequencyBins).fill(0);
     state.metrics.peakIndex = -1;
+    state.metrics.peakHz = null;
+    state.sessionStats = newSessionStats();
   }
 
   function resetUi() {
@@ -1774,7 +1992,38 @@
     updatePulseUi(pulse);
     updateRespUi(resp);
     updateFrequencyUi(pulse, fs);
+    accumulateSessionStats(pulse, resp);
     refreshExplanation();
+  }
+
+  function accumulateSessionStats(pulse, resp) {
+    const stats = state.sessionStats;
+    const quality = pulse ? pulse.quality : "no_signal";
+    const bucket = quality === "no_signal" ? "collecting" : quality;
+
+    if (stats.qualityCounts[bucket] === undefined) return;
+    stats.qualityCounts[bucket]++;
+    stats.qualityTotal++;
+
+    if (state.displayedBpm != null && quality !== "no_signal" && quality !== "collecting") {
+      stats.bpmSum += state.displayedBpm;
+      stats.bpmCount++;
+    }
+
+    if (resp && resp.rate != null) {
+      stats.respSum += resp.rate;
+      stats.respCount++;
+    }
+
+    if (quality !== "no_signal") {
+      const peakHz = pulse && pulse.bpm != null
+        ? pulse.bpm / 60
+        : state.metrics.peakHz;
+      if (peakHz != null) {
+        stats.peakHzSum += peakHz;
+        stats.peakHzCount++;
+      }
+    }
   }
 
   function updateCalibrationState() {
@@ -1872,6 +2121,7 @@
       updateFrequencyBars(new Array(CONFIG.frequencyBins).fill(0), -1);
       setText(dom.dominantHz, "-- Hz");
       setText(dom.secondaryHz, "-- Hz");
+      state.metrics.peakHz = null;
       return;
     }
 
@@ -1879,6 +2129,7 @@
     const scan = frequencyScan(filtered, fs, 0.5, 3.5, CONFIG.frequencyBins);
     state.metrics.frequencyBins = scan.bins;
     state.metrics.peakIndex = scan.peakIndex;
+    state.metrics.peakHz = scan.peakHz;
 
     updateFrequencyBars(scan.bins, scan.peakIndex);
 
@@ -2196,6 +2447,70 @@
     return "";
   }
 
+  function qualityColor(value) {
+    if (value === "usable") return COLORS.green;
+    if (value === "weak") return COLORS.amber;
+    if (value === "unstable") return COLORS.red;
+    return COLORS.cyan;
+  }
+
+  function showSessionSummary(snapshot) {
+    dom.summaryBody.innerHTML = renderSessionSummary(snapshot);
+    dom.sessionSummary.hidden = false;
+  }
+
+  function hideSessionSummary() {
+    dom.sessionSummary.hidden = true;
+  }
+
+  function renderSessionSummary(snap) {
+    const bpmRow = snap.avgBpm != null
+      ? `<div class="panel-row"><span>Avg BPM:</span><span class="val red">${Math.round(snap.avgBpm)}</span></div>`
+      : `<div class="panel-row"><span>Avg BPM:</span><span class="val">--</span></div>`;
+
+    const respRow = snap.avgResp != null
+      ? `<div class="panel-row"><span>Avg respiration:</span><span class="val cyan">${snap.avgResp.toFixed(1)}/min</span></div>`
+      : `<div class="panel-row"><span>Avg respiration:</span><span class="val">--</span></div>`;
+
+    const noUsable = snap.avgBpm == null
+      ? `<div class="summary-empty">NO USABLE PULSE SIGNAL CAPTURED</div>`
+      : "";
+
+    const order = ["usable", "weak", "unstable", "collecting"];
+    const qualityBars = order.map(key => {
+      const pct = snap.qualityPct[key] || 0;
+      const label = key === "collecting" ? "collecting" : qualityLabel(key).toLowerCase();
+      const color = qualityColor(key);
+      return `
+        <div class="summary-bar-row">
+          <span class="summary-bar-label">${label}</span>
+          <div class="summary-bar-track">
+            <div class="summary-bar-fill" style="width: ${pct.toFixed(1)}%; background: ${color};"></div>
+          </div>
+          <span class="summary-bar-pct">${pct.toFixed(0)}%</span>
+        </div>`;
+    }).join("");
+
+    const dominantRow = snap.dominantHz != null
+      ? `<div class="panel-row"><span>Dominant frequency:</span><span class="val">${snap.dominantHz.toFixed(2)} Hz (${Math.round(snap.dominantHz * 60)} BPM)</span></div>`
+      : `<div class="panel-row"><span>Dominant frequency:</span><span class="val">--</span></div>`;
+
+    const durationRow = `<div class="panel-row"><span>Duration:</span><span class="val green">${snap.durationSec.toFixed(1)}s</span></div>`;
+    const samplesRow = `<div class="panel-row"><span>Metric ticks:</span><span class="val">${snap.tickCount}</span></div>`;
+
+    return `
+      ${bpmRow}
+      ${respRow}
+      ${noUsable}
+      <div class="summary-divider"></div>
+      ${qualityBars}
+      <div class="summary-divider"></div>
+      ${dominantRow}
+      ${durationRow}
+      ${samplesRow}
+    `;
+  }
+
   function motionLabel(value) {
     if (!Number.isFinite(value)) return "--";
     if (value > 0.075) return "HIGH";
@@ -2368,7 +2683,7 @@
     try { window.localStorage.setItem("bv.explainHintSeen", "1"); } catch (_) {}
   }
 
-  window.addEventListener("beforeunload", stopCapture);
+  window.addEventListener("beforeunload", () => stopCapture({ showSummary: false }));
   init();
 })();
 </script>
