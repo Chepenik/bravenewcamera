@@ -1,0 +1,2376 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Biometric Vision - Honest rPPG Demo</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --bg: #0a0e14;
+    --panel: #0d1117;
+    --border: #1f2937;
+    --text: #c9d1d9;
+    --muted: #8b949e;
+    --red: #ef4444;
+    --red-dark: #dc2626;
+    --green: #10b981;
+    --cyan: #06b6d4;
+    --amber: #f59e0b;
+    --pink: #ec4899;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Courier New", Consolas, monospace;
+    min-height: 100vh;
+    width: 100vw;
+    overflow: hidden;
+  }
+
+  [hidden] { display: none !important; }
+
+  .container {
+    display: grid;
+    grid-template-columns: 280px 1fr 280px;
+    grid-template-rows: 40px 1fr 180px;
+    grid-template-areas:
+      "header header header"
+      "left video right"
+      "left graph right";
+    height: 100vh;
+    gap: 8px;
+    padding: 8px;
+  }
+
+  .header {
+    grid-area: header;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 16px;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-left: 3px solid var(--red);
+    font-size: 12px;
+    letter-spacing: 2px;
+  }
+
+  .header .title { color: var(--red); font-weight: bold; }
+  .header .status { color: var(--green); }
+  .header .blink { animation: blink 1.2s infinite; }
+  @keyframes blink { 50% { opacity: 0.3; } }
+
+  .left-panel,
+  .right-panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 12px;
+    overflow-y: auto;
+    font-size: 11px;
+  }
+
+  .left-panel { grid-area: left; }
+
+  .right-panel {
+    grid-area: right;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .video-container {
+    grid-area: video;
+    position: relative;
+    background: #000;
+    border: 1px solid var(--border);
+    overflow: hidden;
+    min-height: 260px;
+  }
+
+  #video,
+  #overlay {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+
+  #video {
+    object-fit: cover;
+    transform: scaleX(-1);
+    background: #000;
+  }
+
+  #overlay { pointer-events: none; }
+
+  .graph-container {
+    grid-area: graph;
+    background: var(--panel);
+    border: 1px solid var(--border);
+    padding: 8px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .graph-box {
+    border: 1px solid var(--border);
+    padding: 6px;
+    display: flex;
+    flex-direction: column;
+    background: #000;
+    min-width: 0;
+  }
+
+  .graph-box canvas {
+    flex: 1;
+    width: 100%;
+    min-height: 80px;
+    display: block;
+  }
+
+  .graph-label {
+    color: var(--green);
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+  }
+
+  .graph-label.cyan { color: var(--cyan); }
+
+  .panel-section {
+    margin-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 12px;
+  }
+
+  .panel-section:last-child { border-bottom: none; }
+
+  .panel-title {
+    color: var(--cyan);
+    font-size: 10px;
+    letter-spacing: 2px;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+  }
+
+  .panel-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 4px;
+    color: var(--muted);
+  }
+
+  .panel-row .val {
+    color: var(--text);
+    text-align: right;
+  }
+
+  .panel-row .val.green { color: var(--green); }
+  .panel-row .val.red { color: var(--red); }
+  .panel-row .val.cyan { color: var(--cyan); }
+  .panel-row .val.amber { color: var(--amber); }
+
+  .overlay-display {
+    position: absolute;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  .bpm-display {
+    top: 20px;
+    left: 20px;
+    background: rgba(0, 0, 0, 0.72);
+    border-left: 3px solid var(--red);
+    padding: 12px 20px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .bpm-circle {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 12px var(--red);
+    animation: pulse 1s infinite;
+  }
+
+  @keyframes pulse {
+    0%, 100% { transform: scale(1); opacity: 1; }
+    50% { transform: scale(1.3); opacity: 0.6; }
+  }
+
+  .bpm-value {
+    font-size: 42px;
+    font-weight: bold;
+    color: #fff;
+    line-height: 1;
+  }
+
+  .bpm-unit {
+    font-size: 14px;
+    color: var(--red);
+    letter-spacing: 2px;
+  }
+
+  .metric-caption {
+    color: var(--muted);
+    font-size: 9px;
+    letter-spacing: 1px;
+    margin-top: 3px;
+  }
+
+  .breathing-display {
+    top: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.72);
+    border-left: 3px solid var(--cyan);
+    padding: 10px 16px;
+    text-align: right;
+  }
+
+  .breathing-label,
+  .confidence-label {
+    font-size: 9px;
+    letter-spacing: 2px;
+  }
+
+  .breathing-label { color: var(--cyan); }
+  .confidence-label { color: var(--green); }
+
+  .breathing-value {
+    font-size: 22px;
+    color: #fff;
+    font-weight: bold;
+  }
+
+  .confidence-display {
+    bottom: 20px;
+    right: 20px;
+    background: rgba(0, 0, 0, 0.72);
+    border-left: 3px solid var(--green);
+    padding: 8px 14px;
+  }
+
+  .confidence-value {
+    font-size: 18px;
+    color: #fff;
+  }
+
+  .scan-line {
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--green), transparent);
+    animation: scan 3s linear infinite;
+    z-index: 5;
+    pointer-events: none;
+  }
+
+  @keyframes scan {
+    0% { top: 0; }
+    100% { top: 100%; }
+  }
+
+  .corner {
+    position: absolute;
+    width: 20px;
+    height: 20px;
+    border: 2px solid var(--green);
+    z-index: 5;
+  }
+
+  .corner.tl { top: 8px; left: 8px; border-right: none; border-bottom: none; }
+  .corner.tr { top: 8px; right: 8px; border-left: none; border-bottom: none; }
+  .corner.bl { bottom: 8px; left: 8px; border-right: none; border-top: none; }
+  .corner.br { bottom: 8px; right: 8px; border-left: none; border-top: none; }
+
+  .start-btn {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: var(--red);
+    color: #fff;
+    border: none;
+    padding: 18px 40px;
+    font-family: inherit;
+    font-size: 14px;
+    letter-spacing: 3px;
+    cursor: pointer;
+    z-index: 20;
+    font-weight: bold;
+    box-shadow: 0 0 30px rgba(239, 68, 68, 0.5);
+  }
+
+  .start-btn:hover { background: var(--red-dark); }
+
+  .start-btn.running {
+    top: auto;
+    bottom: 18px;
+    left: 18px;
+    transform: none;
+    padding: 10px 16px;
+    font-size: 11px;
+    background: rgba(13, 17, 23, 0.92);
+    border: 1px solid var(--red);
+    box-shadow: 0 0 16px rgba(239, 68, 68, 0.35);
+  }
+
+  .start-btn:disabled {
+    opacity: 0.6;
+    cursor: wait;
+  }
+
+  .bar-chart {
+    height: 80px;
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    padding: 4px;
+    background: #000;
+    border: 1px solid var(--border);
+  }
+
+  .bar {
+    flex: 1;
+    background: var(--cyan);
+    min-height: 2px;
+    transition: height 0.25s ease;
+  }
+
+  .log-line {
+    margin-bottom: 2px;
+    color: var(--muted);
+    font-size: 10px;
+    line-height: 1.35;
+  }
+
+  .log-line .time { color: var(--green); }
+  .log-line .warn { color: var(--amber); }
+  .log-line .error { color: var(--red); }
+
+  .explain-target { cursor: help; }
+  .explain-target:hover {
+    outline: 1px dashed var(--cyan);
+    outline-offset: 2px;
+  }
+  .overlay-display.explain-target { pointer-events: auto; }
+
+  #explainHint {
+    position: fixed;
+    top: 52px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(6, 182, 212, 0.12);
+    border: 1px solid var(--cyan);
+    border-left: 3px solid var(--cyan);
+    color: var(--cyan);
+    padding: 6px 10px 6px 14px;
+    font-size: 10px;
+    letter-spacing: 1px;
+    z-index: 30;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 0 20px rgba(6, 182, 212, 0.25);
+    max-width: 90vw;
+  }
+
+  #explainHint button {
+    background: none;
+    border: none;
+    color: var(--cyan);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    padding: 0 4px;
+    line-height: 1;
+  }
+
+  #explainCard {
+    position: fixed;
+    z-index: 40;
+    background: var(--panel);
+    border: 1px solid var(--cyan);
+    border-left: 3px solid var(--cyan);
+    max-width: 340px;
+    min-width: 220px;
+    padding: 10px 12px;
+    font-size: 11px;
+    color: var(--text);
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.6), 0 0 14px rgba(6, 182, 212, 0.25);
+    font-family: inherit;
+  }
+
+  #explainCard .ex-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  #explainCard .ex-title {
+    color: var(--cyan);
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  #explainCard .ex-close {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-family: inherit;
+    font-size: 14px;
+    padding: 0 4px;
+    line-height: 1;
+  }
+
+  #explainCard .ex-close:hover { color: var(--text); }
+  #explainCard .ex-body { line-height: 1.5; }
+  #explainCard .ex-body p { margin-bottom: 6px; }
+  #explainCard .ex-body p:last-child { margin-bottom: 0; }
+  #explainCard .ex-body code {
+    color: var(--amber);
+    font-size: 10px;
+    background: rgba(245, 158, 11, 0.08);
+    padding: 1px 4px;
+  }
+  #explainCard .ex-body strong { color: var(--text); }
+  #explainCard .ex-body em { color: var(--muted); font-style: italic; }
+
+  #explainCard .ex-row {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    color: var(--muted);
+    margin-bottom: 2px;
+  }
+
+  #explainCard .ex-row .val { color: var(--text); text-align: right; }
+  #explainCard .ex-row .val.green { color: var(--green); }
+  #explainCard .ex-row .val.amber { color: var(--amber); }
+  #explainCard .ex-row .val.red { color: var(--red); }
+  #explainCard .ex-row .val.cyan { color: var(--cyan); }
+
+  #explainCard .ex-divider {
+    border-top: 1px dashed var(--border);
+    margin: 6px 0;
+  }
+
+  #explainCard .ex-note {
+    color: var(--muted);
+    font-size: 10px;
+    margin-top: 8px;
+    padding-top: 6px;
+    border-top: 1px solid var(--border);
+    font-style: italic;
+  }
+
+  @media (max-width: 900px) {
+    body { overflow: auto; }
+
+    .container {
+      height: auto;
+      min-height: 100vh;
+      grid-template-columns: 1fr;
+      grid-template-rows: 44px 58vh auto auto auto;
+      grid-template-areas:
+        "header"
+        "video"
+        "graph"
+        "left"
+        "right";
+    }
+
+    .header {
+      font-size: 10px;
+      letter-spacing: 1px;
+      padding: 0 10px;
+    }
+
+    .header .status { display: none; }
+
+    .graph-container {
+      grid-template-columns: 1fr;
+      min-height: 260px;
+    }
+
+    #explainHint {
+      font-size: 9px;
+      padding: 5px 8px;
+    }
+
+    #explainCard {
+      max-width: 88vw;
+      font-size: 10px;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="header">
+    <div class="title">◉ BIOMETRIC VISION // HONEST rPPG DEMO</div>
+    <div class="status"><span class="blink">●</span> <span id="statusText">IDLE</span> // SESSION <span id="sessionId">----</span></div>
+  </div>
+
+  <div class="left-panel">
+    <div class="panel-section">
+      <div class="panel-title">◤ Algorithm Notes</div>
+      <div class="panel-row explain-target" data-explain="approach"><span>Approach:</span><span class="val cyan">Color rPPG estimate</span></div>
+      <div class="panel-row explain-target" data-explain="sample-rate-target"><span>Sampling target:</span><span class="val" id="sampleRateLabel">30 Hz</span></div>
+      <div class="panel-row explain-target" data-explain="analyzer-size"><span>Analyzer:</span><span class="val">160 x 120</span></div>
+      <div class="panel-row explain-target" data-explain="pulse-band"><span>Pulse band:</span><span class="val">0.7 - 3.5 Hz approx</span></div>
+      <div class="panel-row explain-target" data-explain="roi-model"><span>ROI model:</span><span class="val amber">Fixed guide</span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">◤ Regions of Interest</div>
+      <div class="panel-row explain-target" data-explain="roi-forehead"><span>◼ Forehead:</span><span class="val" id="sig-forehead">WAITING</span></div>
+      <div class="panel-row explain-target" data-explain="roi-nose"><span>◼ Nose Bridge:</span><span class="val" id="sig-nose">WAITING</span></div>
+      <div class="panel-row explain-target" data-explain="roi-undereye"><span>◼ Under-Eye:</span><span class="val" id="sig-undereye">WAITING</span></div>
+      <div class="panel-row explain-target" data-explain="roi-lcheek"><span>◼ Left Cheek:</span><span class="val" id="sig-lcheek">WAITING</span></div>
+      <div class="panel-row explain-target" data-explain="roi-rcheek"><span>◼ Right Cheek:</span><span class="val" id="sig-rcheek">WAITING</span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">◤ Signal Quality</div>
+      <div class="panel-row explain-target" data-explain="quality"><span>Quality:</span><span class="val" id="qualityState">NO SIGNAL</span></div>
+      <div class="panel-row explain-target" data-explain="motion-proxy"><span>Motion proxy:</span><span class="val" id="motionProxy">--</span></div>
+      <div class="panel-row explain-target" data-explain="illumination"><span>Illumination:</span><span class="val" id="illumState">--</span></div>
+      <div class="panel-row explain-target" data-explain="face-guide"><span>Face guide:</span><span class="val amber" id="faceGuide">FIXED</span></div>
+      <div class="panel-row explain-target" data-explain="frame-rate"><span>Frame rate:</span><span class="val" id="fps">-- FPS</span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">◤ Pulse Estimate</div>
+      <div class="panel-row explain-target" data-explain="bpm"><span>Estimated BPM:</span><span class="val red" id="meanBpm">--</span></div>
+      <div class="panel-row explain-target" data-explain="peak-stability"><span>Peak stability:</span><span class="val" id="peakStability">--</span></div>
+      <div class="panel-row explain-target" data-explain="peak-freq"><span>Peak freq:</span><span class="val" id="peakFreq">-- Hz</span></div>
+    </div>
+
+    <div class="panel-section explain-target" data-explain="log">
+      <div class="panel-title">◤ System Log</div>
+      <div id="logArea"></div>
+    </div>
+  </div>
+
+  <div class="video-container">
+    <video id="video" autoplay playsinline muted></video>
+    <canvas id="overlay"></canvas>
+
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+    <div class="scan-line" id="scanLine" hidden></div>
+
+    <div class="overlay-display bpm-display explain-target" data-explain="bpm-overlay" id="bpmDisplay" hidden>
+      <div class="bpm-circle" id="bpmCircle"></div>
+      <div>
+        <div><span class="bpm-value" id="bpmValue">--</span> <span class="bpm-unit">BPM</span></div>
+        <div class="metric-caption">ESTIMATED PULSE, NOT MEDICAL</div>
+      </div>
+    </div>
+
+    <div class="overlay-display breathing-display explain-target" data-explain="breathing-overlay" id="breathingDisplay" hidden>
+      <div class="breathing-label">EXP. BREATHING</div>
+      <div><span class="breathing-value" id="breathingValue">--</span>/min</div>
+      <div class="metric-caption">MOTION/LIGHT SENSITIVE</div>
+    </div>
+
+    <div class="overlay-display confidence-display explain-target" data-explain="quality-overlay" id="qualityDisplay" hidden>
+      <div class="confidence-label">SIGNAL QUALITY</div>
+      <div class="confidence-value" id="qualityValue">--%</div>
+    </div>
+
+    <button class="start-btn explain-target" data-explain="control-btn" id="controlBtn">▶ START WEBCAM</button>
+  </div>
+
+  <div class="right-panel">
+    <div class="panel-section">
+      <div class="panel-title explain-target" data-explain="freq-chart">◤ Frequency Scan</div>
+      <div class="bar-chart" id="barChart"></div>
+      <div class="panel-row" style="margin-top:6px;"><span>0.5Hz</span><span>3.5Hz</span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">◤ Frequency Estimate</div>
+      <div class="panel-row explain-target" data-explain="dominant-hz"><span>Dominant:</span><span class="val red" id="dominantHz">-- Hz</span></div>
+      <div class="panel-row explain-target" data-explain="secondary-hz"><span>Secondary:</span><span class="val cyan" id="secondaryHz">-- Hz</span></div>
+      <div class="panel-row explain-target" data-explain="band-scanned"><span>Band scanned:</span><span class="val" id="bandwidth">0.5-3.5 Hz</span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">◤ Respiration Estimate</div>
+      <div class="panel-row explain-target" data-explain="resp-rate"><span>Rate:</span><span class="val cyan" id="respRate">--/min</span></div>
+      <div class="panel-row explain-target" data-explain="resp-status"><span>Status:</span><span class="val" id="respPattern">COLLECTING</span></div>
+      <div class="panel-row explain-target" data-explain="resp-amp"><span>Amplitude:</span><span class="val" id="respAmp">--</span></div>
+    </div>
+
+    <div class="panel-section">
+      <div class="panel-title">◤ Interpretation</div>
+      <div class="panel-row explain-target" data-explain="phys-status"><span>Status:</span><span class="val amber" id="physStatus">DEMO ONLY</span></div>
+      <div class="panel-row explain-target" data-explain="clinical-use"><span>Clinical use:</span><span class="val red" id="clinicalUse">NO</span></div>
+      <div class="panel-row explain-target" data-explain="calibration"><span>Calibration:</span><span class="val" id="calibrationState">WAITING</span></div>
+    </div>
+  </div>
+
+  <div class="graph-container">
+    <div class="graph-box explain-target" data-explain="pulse-waveform">
+      <div class="graph-label">◤ COLOR PULSE SIGNAL</div>
+      <canvas id="ppgCanvas"></canvas>
+    </div>
+    <div class="graph-box explain-target" data-explain="resp-waveform">
+      <div class="graph-label cyan">◤ SLOW BRIGHTNESS SIGNAL</div>
+      <canvas id="respCanvas"></canvas>
+    </div>
+  </div>
+</div>
+
+<div id="explainHint" hidden>
+  <span>TIP: Click any label or number to see what it means</span>
+  <button type="button" aria-label="Dismiss hint">×</button>
+</div>
+
+<div id="explainCard" hidden role="dialog" aria-modal="false" aria-live="polite">
+  <div class="ex-header">
+    <div class="ex-title"></div>
+    <button type="button" class="ex-close" aria-label="Close explanation">×</button>
+  </div>
+  <div class="ex-body"></div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const CONFIG = {
+    analyzerWidth: 160,
+    analyzerHeight: 120,
+    targetSampleHz: 30,
+    maxSamples: 512,
+    minPulseSamples: 180,
+    minRespSamples: 240,
+    metricIntervalMs: 700,
+    renderIntervalMs: 66,
+    logLimit: 10,
+    bpmSmoothingAlpha: 0.25,
+    pulseBand: { low: 0.7, high: 3.5 },
+    respBand: { low: 0.1, high: 0.6 },
+    frequencyBins: 32
+  };
+
+  const COLORS = {
+    green: "#10b981",
+    cyan: "#06b6d4",
+    red: "#ef4444",
+    amber: "#f59e0b",
+    gridGreen: "#0a1f14",
+    gridCyan: "#061f22"
+  };
+
+  const ROIS = [
+    { name: "forehead", x: 0.40, y: 0.18, w: 0.20, h: 0.08, color: COLORS.green, label: "FOREHEAD" },
+    { name: "nose", x: 0.46, y: 0.42, w: 0.08, h: 0.10, color: COLORS.amber, label: "NOSE" },
+    { name: "undereye", x: 0.36, y: 0.36, w: 0.28, h: 0.05, color: "#ec4899", label: "UNDER-EYE" },
+    { name: "lcheek", x: 0.26, y: 0.48, w: 0.13, h: 0.10, color: COLORS.cyan, label: "L-CHEEK" },
+    { name: "rcheek", x: 0.61, y: 0.48, w: 0.13, h: 0.10, color: COLORS.cyan, label: "R-CHEEK" }
+  ];
+
+  // EXPLAIN registry. Each entry: { title, body(extra?) -> HTML string }.
+  // Bodies read from CONFIG / ROIS / state rather than hardcoding so they stay truthful if tunables change.
+  const EXPLAIN = {
+    "approach": {
+      title: "rPPG Approach",
+      body: () => `
+        <p>rPPG = <strong>remote photoplethysmography</strong>. Your skin looks slightly greener when the heart pushes blood through it, because hemoglobin absorbs green light.</p>
+        <p>The per-frame pulse value is <code>green − (red + blue) / 2</code> averaged over facial skin — the subtraction cancels shared brightness changes from ambient light.</p>
+      `
+    },
+    "sample-rate-target": {
+      title: "Sampling Rate",
+      body: () => {
+        const measured = estimateSampleRate();
+        return `
+          <p>We try to read one frame every <strong>${(1000 / CONFIG.targetSampleHz).toFixed(1)} ms</strong> (${CONFIG.targetSampleHz} Hz). At this rate we can see rhythms up to ~${(CONFIG.targetSampleHz / 2)} Hz — well above the ~3 Hz needed for normal pulses.</p>
+          <div class="ex-row"><span>Target:</span><span class="val">${CONFIG.targetSampleHz} Hz</span></div>
+          <div class="ex-row"><span>Measured:</span><span class="val cyan">${measured.toFixed(1)} Hz</span></div>
+        `;
+      }
+    },
+    "analyzer-size": {
+      title: "Analyzer Canvas",
+      body: () => `
+        <p>Each video frame is redrawn onto a small <strong>${CONFIG.analyzerWidth} × ${CONFIG.analyzerHeight}</strong> canvas before we read pixels. Downsampling averages out noise and keeps the loop fast.</p>
+        <p>We sample every 2nd pixel inside each ROI, so each frame's pulse value is built from a few thousand pixels — enough to be stable, few enough to be real-time.</p>
+      `
+    },
+    "pulse-band": {
+      title: "Pulse Frequency Band",
+      body: () => `
+        <p>We only trust signal wiggles between <strong>${CONFIG.pulseBand.low} Hz and ${CONFIG.pulseBand.high} Hz</strong> — roughly <strong>${Math.round(CONFIG.pulseBand.low * 60)}–${Math.round(CONFIG.pulseBand.high * 60)} BPM</strong>, the physiological range.</p>
+        <p>Everything outside that band (slow drift, fast noise) is filtered out before we look for peaks.</p>
+      `
+    },
+    "roi-model": {
+      title: "ROI Model: Fixed Guide",
+      body: () => `
+        <p>We do <em>not</em> run real face detection. We draw a fixed face-sized rectangle in the middle of the frame and sample pre-set regions inside it. <strong>You have to position your face inside the guide.</strong></p>
+        <p>A production system would use a face tracker; this demo labels its limitation honestly.</p>
+      `
+    },
+
+    "roi-forehead": {
+      title: "Forehead Region",
+      body: () => `
+        <p>The forehead is a top rPPG region: wide, flat, minimal facial hair, less motion than the mouth, good blood perfusion near the surface.</p>
+        <p>We average R/G/B pixels over this rectangle every frame.</p>
+      `
+    },
+    "roi-nose": {
+      title: "Nose Bridge Region",
+      body: () => `
+        <p>The nose bridge is small but bony and stable — it barely moves during speech or expression, so it tends to give a cleaner baseline than the cheeks when lighting is steady.</p>
+      `
+    },
+    "roi-undereye": {
+      title: "Under-Eye Region",
+      body: () => `
+        <p>Under-eye skin is thin with vessels close to the surface, so the color-change signal can be strong — but this region also moves with blinking.</p>
+      `
+    },
+    "roi-lcheek": {
+      title: "Left Cheek Region",
+      body: () => `
+        <p>Cheeks have broad, well-perfused skin. Averaging both cheeks cancels some shadow differences between the two sides of the face.</p>
+      `
+    },
+    "roi-rcheek": {
+      title: "Right Cheek Region",
+      body: () => `
+        <p>Cheeks have broad, well-perfused skin. Averaging both cheeks cancels some shadow differences between the two sides of the face.</p>
+      `
+    },
+
+    "quality": {
+      title: "Signal Quality Score",
+      body: () => {
+        const pulse = state.metrics.pulse;
+        if (!pulse || pulse.bpm === null) {
+          const count = state.samples.pulse.length;
+          return `
+            <p>A 0–100 score for how trustworthy the pulse estimate is. Not yet available — still collecting (${count} / ${CONFIG.minPulseSamples} samples).</p>
+            <p>Once the signal is strong enough, this card shows a live breakdown of the four components that make the score.</p>
+          `;
+        }
+        const intervalCv = pulse.intervalCv || 0;
+        const peaks = pulse.peaks || [];
+        const filtered = pulse.filtered || [];
+        const signalStd = filtered.length ? stddev(filtered) : 0;
+        const motionAvg = averageRecent(state.samples.motion, 60);
+        const stability = 100 * (1 - clamp(intervalCv / 0.22, 0, 1));
+        const peakScore = 100 * clamp((peaks.length - 3) / 6, 0, 1);
+        const amplitude = 100 * clamp(signalStd / 0.003, 0, 1);
+        const motionPen = 100 * clamp(motionAvg / 0.12, 0, 1);
+        return `
+          <p>A 0–100 score blending four components. Live values below.</p>
+          <div class="ex-row"><span>Stability (50%)</span><span class="val">${stability.toFixed(0)}</span></div>
+          <div class="ex-row"><span>Peak count (20%)</span><span class="val">${peakScore.toFixed(0)}</span></div>
+          <div class="ex-row"><span>Amplitude (30%)</span><span class="val">${amplitude.toFixed(0)}</span></div>
+          <div class="ex-row"><span>Motion (−35%)</span><span class="val">${motionPen.toFixed(0)}</span></div>
+          <div class="ex-divider"></div>
+          <div class="ex-row"><span>Total</span><span class="val ${qualityClass(pulse.quality)}">${Math.round(pulse.score)}</span></div>
+          <div class="ex-note">&lt; 35 or high motion → "unstable". 35–59 → "weak". 60+ → "usable". The big BPM hides when quality is "no signal".</div>
+        `;
+      }
+    },
+    "motion-proxy": {
+      title: "Motion Proxy",
+      body: () => {
+        const motionAvg = averageRecent(state.samples.motion, 60);
+        const label = motionLabel(motionAvg);
+        return `
+          <p>Per frame we compute a rough "how much changed" number from brightness + pulse-value differences vs. the previous frame. The motion proxy is the average of the last ~60 samples.</p>
+          <div class="ex-row"><span>Current:</span><span class="val">${motionAvg.toFixed(3)}</span></div>
+          <div class="ex-row"><span>Label:</span><span class="val ${motionAvg > 0.055 ? 'amber' : 'green'}">${label}</span></div>
+          <div class="ex-note">HIGH motion invalidates the BPM estimate — real heartbeats get buried under movement noise.</div>
+        `;
+      }
+    },
+    "illumination": {
+      title: "Illumination Stability",
+      body: () => {
+        const count = state.samples.luma.length;
+        if (count < 30) {
+          return `<p>We watch how much overall brightness varies over the last ~90 frames. Still collecting (${count} samples; need at least 30).</p>`;
+        }
+        const variation = stddev(state.samples.luma.slice(-90));
+        const st = estimateIlluminationState();
+        return `
+          <p>Brightness variation over the last ~90 frames. Stable lighting is essential — flickering bulbs or monitor glare will look like a pulse signal even if the subject isn't there.</p>
+          <div class="ex-row"><span>Variation:</span><span class="val">${variation.toFixed(2)}</span></div>
+          <div class="ex-row"><span>State:</span><span class="val ${st.className}">${st.label}</span></div>
+        `;
+      }
+    },
+    "face-guide": {
+      title: "Face Guide",
+      body: () => `
+        <p>The dashed rectangle over the video is where we <em>assume</em> the face is. It's a <strong>fixed rectangle</strong>, not a real face detector — when it says FIXED, that's an honest confession, not a bug.</p>
+        <p>Position your face centered in the guide so ROI samples land on skin.</p>
+      `
+    },
+    "frame-rate": {
+      title: "Frame Rate",
+      body: () => `
+        <p>How fast the render loop is actually running, measured once per second. If FPS drops far below ${CONFIG.targetSampleHz}, the pulse estimate gets choppy because we miss samples.</p>
+        <p>Browser tab backgrounding, low-power laptops, and busy devices all drop FPS.</p>
+      `
+    },
+
+    "bpm": {
+      title: "Estimated BPM",
+      body: () => {
+        const pulse = state.metrics.pulse;
+        if (!pulse || pulse.bpm === null) {
+          return `<p>Beats per minute. Not yet estimated — need ${CONFIG.minPulseSamples} samples plus a valid peak train.</p>`;
+        }
+        const displayed = state.displayedBpm != null ? Math.round(state.displayedBpm) : pulse.bpm;
+        return `
+          <p>Beats per minute, from the <strong>median spacing</strong> between detected pulse peaks: <code>60 / median(intervals)</code>.</p>
+          <div class="ex-row"><span>Displayed:</span><span class="val red">${displayed} BPM</span></div>
+          <div class="ex-row"><span>Raw (this tick):</span><span class="val">${pulse.bpm} BPM</span></div>
+          <div class="ex-row"><span>Smoothing α:</span><span class="val">${CONFIG.bpmSmoothingAlpha}</span></div>
+          <div class="ex-note">A low-pass filter (α=${CONFIG.bpmSmoothingAlpha}) stabilizes the number visually. NOT for clinical use.</div>
+        `;
+      }
+    },
+    "peak-stability": {
+      title: "Peak Stability",
+      body: () => {
+        const pulse = state.metrics.pulse;
+        if (!pulse || pulse.intervalCv == null) {
+          return `<p>How consistent the time between detected peaks is. Higher % = steadier beat. Not yet computed.</p>`;
+        }
+        const cvPct = pulse.intervalCv * 100;
+        return `
+          <p>Measures how consistent the beat-to-beat intervals are. Based on the <strong>coefficient of variation (CV)</strong> — lower CV = steadier rhythm.</p>
+          <div class="ex-row"><span>Interval CV:</span><span class="val">${cvPct.toFixed(1)}%</span></div>
+          <div class="ex-row"><span>Stability:</span><span class="val">${Math.round(100 - cvPct)}%</span></div>
+          <div class="ex-note">CV above 22% (stability &lt; 78%) → signal flagged as unstable.</div>
+        `;
+      }
+    },
+    "peak-freq": {
+      title: "Peak Frequency",
+      body: () => {
+        const pulse = state.metrics.pulse;
+        if (!pulse || pulse.bpm === null) return `<p>BPM expressed in Hz (beats per second). 60 BPM = 1 Hz. Not yet computed.</p>`;
+        return `
+          <p>Same number as BPM, in Hz. 60 BPM = 1 Hz, 120 BPM = 2 Hz. Useful for comparing against the frequency scan below.</p>
+          <div class="ex-row"><span>Current:</span><span class="val">${(pulse.bpm / 60).toFixed(2)} Hz</span></div>
+        `;
+      }
+    },
+
+    "log": {
+      title: "System Log",
+      body: () => `
+        <p>The most recent <strong>${CONFIG.logLimit}</strong> status messages. Amber = warnings; red = errors; plain = informational.</p>
+        <p>Watch for: <em>"Using fixed face-centered ROI guide, not face detection"</em> — a reminder that this demo doesn't track your face.</p>
+      `
+    },
+
+    "freq-chart": {
+      title: "Frequency Scan",
+      body: () => `
+        <p>Rather than trusting only the peak detector, we sweep the filtered signal through <strong>${CONFIG.frequencyBins} bins</strong> from 0.5 Hz to 3.5 Hz and ask how much energy is at each. A clean pulse produces one tall bar around BPM ÷ 60.</p>
+        <p>This is a hand-rolled DFT — a slow-but-simple loop over a Hamming-windowed signal, not an FFT. Click a bar to see its exact frequency and amplitude.</p>
+      `
+    },
+    "freq-bar": {
+      title: "Frequency Bin",
+      body: (extra) => {
+        const idx = extra && extra.barIndex != null ? extra.barIndex : 0;
+        const lowHz = 0.5, highHz = 3.5;
+        const bins = CONFIG.frequencyBins;
+        const freq = lowHz + (idx / Math.max(1, bins - 1)) * (highHz - lowHz);
+        const value = state.metrics.frequencyBins[idx] || 0;
+        const maxVal = Math.max(1e-9, ...state.metrics.frequencyBins);
+        const rel = (value / maxVal) * 100;
+        const isPeak = idx === state.metrics.peakIndex;
+        return `
+          <p>Bin ${idx + 1} of ${bins} in the 0.5–3.5 Hz scan.</p>
+          <div class="ex-row"><span>Frequency:</span><span class="val cyan">${freq.toFixed(2)} Hz</span></div>
+          <div class="ex-row"><span>Equivalent BPM:</span><span class="val">${(freq * 60).toFixed(0)}</span></div>
+          <div class="ex-row"><span>Amplitude:</span><span class="val">${value.toFixed(2)}</span></div>
+          <div class="ex-row"><span>Relative:</span><span class="val">${rel.toFixed(0)}%</span></div>
+          ${isPeak ? `<div class="ex-note">This bin is currently the peak — the dominant frequency in the pulse signal.</div>` : ``}
+        `;
+      }
+    },
+    "dominant-hz": {
+      title: "Dominant Frequency",
+      body: () => {
+        const pulse = state.metrics.pulse;
+        const bpm = pulse && pulse.bpm != null ? pulse.bpm : null;
+        const bpmLine = bpm != null
+          ? `<div class="ex-row"><span>Current:</span><span class="val red">${(bpm / 60).toFixed(2)} Hz (${bpm} BPM)</span></div>`
+          : `<div class="ex-row"><span>Current:</span><span class="val">not yet</span></div>`;
+        return `
+          <p>The frequency bin with the largest amplitude in the scan. When a valid BPM is available, we show <code>BPM / 60</code> because it's more precise than a discrete bin.</p>
+          ${bpmLine}
+          <p class="ex-note">If this disagrees with the peak detector, the signal is ambiguous and quality should drop.</p>
+        `;
+      }
+    },
+    "secondary-hz": {
+      title: "Secondary Frequency",
+      body: () => `
+        <p>The second-largest peak in the frequency scan (at least 2 bins from the dominant one). On a clean signal this is often a harmonic (2× the fundamental); on a noisy signal it's competing noise.</p>
+      `
+    },
+    "band-scanned": {
+      title: "Scanned Band",
+      body: () => `
+        <p>The frequency range we sweep: <strong>0.5–3.5 Hz</strong>, corresponding to 30–210 BPM — slightly wider than the physiological range so we can see adjacent "suspicious" energy.</p>
+      `
+    },
+
+    "resp-rate": {
+      title: "Respiration Rate",
+      body: () => {
+        const resp = state.metrics.resp;
+        if (!resp || resp.rate === null) {
+          const count = state.samples.resp.length;
+          return `<p>Breaths per minute, from slow brightness changes. Not yet computed (${count} / ${CONFIG.minRespSamples} samples).</p>`;
+        }
+        return `
+          <p>Breaths per minute, estimated from <strong>slow brightness changes</strong> in the face region. Breathing subtly changes pose and illumination — that's what we're actually detecting, not true respiration volume.</p>
+          <div class="ex-row"><span>Rate:</span><span class="val cyan">${resp.rate}/min</span></div>
+          <div class="ex-row"><span>Band:</span><span class="val">${CONFIG.respBand.low}–${CONFIG.respBand.high} Hz (${Math.round(CONFIG.respBand.low * 60)}–${Math.round(CONFIG.respBand.high * 60)}/min)</span></div>
+          <div class="ex-note">Very sensitive to motion and lighting changes. Demo-only.</div>
+        `;
+      }
+    },
+    "resp-status": {
+      title: "Respiration Status",
+      body: () => `
+        <p><strong>COLLECTING</strong> — still gathering samples (need ${CONFIG.minRespSamples}).<br>
+        <strong>WEAK</strong> — amplitude too low to estimate.<br>
+        <strong>UNSTABLE</strong> — peaks too irregular or rate out of range (6–40/min).<br>
+        <strong>VARIABLE</strong> — rate found but interval CV &gt; 0.35.<br>
+        <strong>USABLE</strong> — rate found and intervals consistent.</p>
+      `
+    },
+    "resp-amp": {
+      title: "Respiration Amplitude",
+      body: () => `
+        <p>How large the slow brightness swings are right now. <strong>HIGH</strong> / <strong>NORMAL</strong> / <strong>LOW</strong> thresholds are arbitrary — a rough sanity check, not a calibrated measurement.</p>
+      `
+    },
+
+    "phys-status": {
+      title: "Physiological Status",
+      body: () => `
+        <p>Always "DEMO ONLY". This page doesn't interpret the numbers — no stress detection, no fitness inference, no medical diagnosis. It only estimates pulse and respiration rate from video.</p>
+      `
+    },
+    "clinical-use": {
+      title: "Clinical Use",
+      body: () => `
+        <p>Always "NO". This is an educational demo. Real medical measurement requires calibrated sensors, clinical validation, and regulatory approval — none of which apply here.</p>
+      `
+    },
+    "calibration": {
+      title: "Calibration Progress",
+      body: () => {
+        const count = state.samples.pulse.length;
+        const pct = Math.min(100, Math.round((count / CONFIG.minPulseSamples) * 100));
+        const seconds = (CONFIG.minPulseSamples / CONFIG.targetSampleHz).toFixed(0);
+        return `
+          <p>We need at least <strong>${CONFIG.minPulseSamples} pulse samples</strong> (~${seconds} seconds at ${CONFIG.targetSampleHz} Hz) before we trust a BPM estimate. Until then, the big BPM display stays hidden.</p>
+          <div class="ex-row"><span>Samples:</span><span class="val">${count} / ${CONFIG.minPulseSamples}</span></div>
+          <div class="ex-row"><span>Progress:</span><span class="val ${pct >= 100 ? 'green' : 'amber'}">${pct}%</span></div>
+        `;
+      }
+    },
+
+    "bpm-overlay": {
+      title: "Big BPM Display",
+      body: () => {
+        const displayed = state.displayedBpm != null ? Math.round(state.displayedBpm) : '--';
+        return `
+          <p>The smoothed BPM shown over the video. The red dot pulses at your estimated heart rate (60 / BPM seconds per pulse).</p>
+          <div class="ex-row"><span>Displayed:</span><span class="val red">${displayed} BPM</span></div>
+          <p class="ex-note">Only shown after ${CONFIG.minPulseSamples} samples and with at least some signal quality.</p>
+        `;
+      }
+    },
+    "breathing-overlay": {
+      title: "Big Breathing Display",
+      body: () => `
+        <p>Estimated respiration rate in breaths per minute. Only shown once ${CONFIG.minRespSamples} samples are collected and a usable rate is found.</p>
+        <p class="ex-note">Motion / light sensitive — demo-only.</p>
+      `
+    },
+    "quality-overlay": {
+      title: "Big Quality Display",
+      body: () => {
+        const pulse = state.metrics.pulse;
+        if (!pulse || pulse.bpm === null) return `<p>Overall signal-quality percentage (0–100). Not yet available — see the "Quality" row in the left panel for the full breakdown once the signal stabilizes.</p>`;
+        return `
+          <p>Overall signal-quality percentage. Click the "Quality" row in the left panel for the full breakdown of how this is computed.</p>
+          <div class="ex-row"><span>Current:</span><span class="val ${qualityClass(pulse.quality)}">${Math.round(pulse.score)}%</span></div>
+        `;
+      }
+    },
+
+    "pulse-waveform": {
+      title: "Pulse Waveform",
+      body: () => `
+        <p>The most recent color-change samples after filtering: mean subtracted, slow drift removed via a long moving average, then smoothed with a short moving average.</p>
+        <p>Peaks in this curve are candidate heartbeats. A clean pulse looks like a gently throbbing sine wave; noise looks like static.</p>
+      `
+    },
+    "resp-waveform": {
+      title: "Brightness Waveform",
+      body: () => `
+        <p>Slow-frequency content of the overall brightness signal, bandpassed to ${CONFIG.respBand.low}–${CONFIG.respBand.high} Hz. Long, slow swings correspond to breathing-like motion.</p>
+        <p>This is <em>not</em> medical-grade respiration detection — any slow body movement or lighting change will show up here.</p>
+      `
+    },
+
+    "control-btn": {
+      title: "Webcam Control",
+      body: () => `
+        <p>Starts or stops the webcam. The browser asks for permission the first time. We request 1280×720 at 30 fps; if that fails, we fall back to whatever the browser gives us.</p>
+        <p>Stop always tears down the stream so the camera indicator turns off.</p>
+      `
+    }
+  };
+
+  let explainOpenKey = null;
+  let explainOpenExtra = null;
+  let explainHintDismissed = false;
+
+  const analyzer = document.createElement("canvas");
+  analyzer.width = CONFIG.analyzerWidth;
+  analyzer.height = CONFIG.analyzerHeight;
+  const analyzerCtx = analyzer.getContext("2d", { willReadFrequently: true });
+
+  const dom = {};
+  const state = {
+    running: false,
+    starting: false,
+    startToken: 0,
+    stream: null,
+    rafId: null,
+    metricTimerId: null,
+    lastSampleAt: 0,
+    lastRenderAt: 0,
+    lastFpsAt: performance.now(),
+    fpsFrames: 0,
+    displayedBpm: null,
+    previousSample: null,
+    lastLoggedQuality: null,
+    samples: {
+      pulse: [],
+      resp: [],
+      luma: [],
+      motion: [],
+      time: []
+    },
+    metrics: {
+      pulse: null,
+      resp: null,
+      frequencyBins: new Array(CONFIG.frequencyBins).fill(0),
+      peakIndex: -1
+    }
+  };
+
+  function cacheDom() {
+    dom.video = document.getElementById("video");
+    dom.overlay = document.getElementById("overlay");
+    dom.overlayCtx = dom.overlay.getContext("2d");
+
+    dom.ppgCanvas = document.getElementById("ppgCanvas");
+    dom.ppgCtx = dom.ppgCanvas.getContext("2d");
+    dom.respCanvas = document.getElementById("respCanvas");
+    dom.respCtx = dom.respCanvas.getContext("2d");
+
+    dom.controlBtn = document.getElementById("controlBtn");
+    dom.scanLine = document.getElementById("scanLine");
+    dom.statusText = document.getElementById("statusText");
+    dom.sessionId = document.getElementById("sessionId");
+
+    dom.bpmDisplay = document.getElementById("bpmDisplay");
+    dom.bpmValue = document.getElementById("bpmValue");
+    dom.bpmCircle = document.getElementById("bpmCircle");
+    dom.breathingDisplay = document.getElementById("breathingDisplay");
+    dom.breathingValue = document.getElementById("breathingValue");
+    dom.qualityDisplay = document.getElementById("qualityDisplay");
+    dom.qualityValue = document.getElementById("qualityValue");
+
+    dom.sampleRateLabel = document.getElementById("sampleRateLabel");
+    dom.qualityState = document.getElementById("qualityState");
+    dom.motionProxy = document.getElementById("motionProxy");
+    dom.illumState = document.getElementById("illumState");
+    dom.faceGuide = document.getElementById("faceGuide");
+    dom.fps = document.getElementById("fps");
+
+    dom.meanBpm = document.getElementById("meanBpm");
+    dom.peakStability = document.getElementById("peakStability");
+    dom.peakFreq = document.getElementById("peakFreq");
+
+    dom.barChart = document.getElementById("barChart");
+    dom.dominantHz = document.getElementById("dominantHz");
+    dom.secondaryHz = document.getElementById("secondaryHz");
+    dom.bandwidth = document.getElementById("bandwidth");
+
+    dom.respRate = document.getElementById("respRate");
+    dom.respPattern = document.getElementById("respPattern");
+    dom.respAmp = document.getElementById("respAmp");
+
+    dom.physStatus = document.getElementById("physStatus");
+    dom.clinicalUse = document.getElementById("clinicalUse");
+    dom.calibrationState = document.getElementById("calibrationState");
+
+    dom.logArea = document.getElementById("logArea");
+
+    dom.explainCard = document.getElementById("explainCard");
+    dom.explainTitle = dom.explainCard.querySelector(".ex-title");
+    dom.explainBody = dom.explainCard.querySelector(".ex-body");
+    dom.explainClose = dom.explainCard.querySelector(".ex-close");
+    dom.explainHint = document.getElementById("explainHint");
+    dom.explainHintClose = dom.explainHint.querySelector("button");
+
+    dom.roiStatus = {
+      forehead: document.getElementById("sig-forehead"),
+      nose: document.getElementById("sig-nose"),
+      undereye: document.getElementById("sig-undereye"),
+      lcheek: document.getElementById("sig-lcheek"),
+      rcheek: document.getElementById("sig-rcheek")
+    };
+
+    dom.frequencyBars = [];
+  }
+
+  function init() {
+    cacheDom();
+    dom.sessionId.textContent = createSessionId();
+    createFrequencyBars();
+    resetUi();
+    dom.controlBtn.addEventListener("click", handleControlClick);
+    initExplain();
+    log("System initialized");
+    log("Awaiting camera activation", "warn");
+  }
+
+  function createSessionId() {
+    const part = Math.random().toString(36).slice(2, 6).toUpperCase();
+    const num = String(Math.floor(1000 + Math.random() * 9000));
+    return `${part}-${num}`;
+  }
+
+  function handleControlClick() {
+    if (state.running || state.starting) {
+      stopCapture();
+      return;
+    }
+    startCapture();
+  }
+
+  async function startCapture() {
+    if (state.running || state.starting) return;
+
+    const token = ++state.startToken;
+    state.starting = true;
+    dom.controlBtn.disabled = true;
+    dom.controlBtn.textContent = "REQUESTING CAMERA...";
+    setStatus("REQUESTING CAMERA");
+    resetSamples();
+    resetUi();
+
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      state.starting = false;
+      dom.controlBtn.disabled = false;
+      dom.controlBtn.textContent = "▶ START WEBCAM";
+      setStatus("NO CAMERA API");
+      log("Camera API is not available in this browser", "error");
+      return;
+    }
+
+    try {
+      log("Requesting camera stream");
+
+      const stream = await requestCameraStream();
+
+      if (token !== state.startToken) {
+        stopStream(stream);
+        return;
+      }
+
+      state.stream = stream;
+      dom.video.srcObject = stream;
+
+      await waitForVideoMetadata();
+      await dom.video.play();
+
+      if (!dom.video.videoWidth || !dom.video.videoHeight) {
+        throw new Error("Video stream has no usable dimensions");
+      }
+
+      state.running = true;
+      state.starting = false;
+      state.lastSampleAt = performance.now();
+      state.lastRenderAt = 0;
+      state.lastFpsAt = performance.now();
+      state.fpsFrames = 0;
+
+      setRunningUi(true);
+      setRoiStatus("ACTIVE", "green");
+      log(`Camera started at ${dom.video.videoWidth}x${dom.video.videoHeight}`);
+      log("Using fixed face-centered ROI guide, not face detection", "warn");
+      log("Collecting signal before showing estimates", "warn");
+
+      state.metricTimerId = window.setInterval(updateMetrics, CONFIG.metricIntervalMs);
+      state.rafId = requestAnimationFrame(loop);
+    } catch (err) {
+      if (token === state.startToken) {
+        handleCameraError(err);
+      }
+    }
+  }
+
+  async function requestCameraStream() {
+    const preferred = {
+      video: {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        frameRate: { ideal: 30, max: 30 },
+        facingMode: { ideal: "user" }
+      },
+      audio: false
+    };
+
+    try {
+      return await navigator.mediaDevices.getUserMedia(preferred);
+    } catch (err) {
+      if (err.name === "NotAllowedError" || err.name === "SecurityError") {
+        throw err;
+      }
+
+      log("Preferred camera constraints failed, retrying with browser defaults", "warn");
+      return navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    }
+  }
+
+  function waitForVideoMetadata() {
+    if (dom.video.videoWidth && dom.video.videoHeight) return Promise.resolve();
+
+    return new Promise((resolve, reject) => {
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        reject(new Error("Timed out waiting for video metadata"));
+      }, 5000);
+
+      function cleanup() {
+        window.clearTimeout(timeout);
+        dom.video.removeEventListener("loadedmetadata", onLoaded);
+        dom.video.removeEventListener("error", onError);
+      }
+
+      function onLoaded() {
+        cleanup();
+        resolve();
+      }
+
+      function onError() {
+        cleanup();
+        reject(new Error("Video failed to load"));
+      }
+
+      dom.video.addEventListener("loadedmetadata", onLoaded, { once: true });
+      dom.video.addEventListener("error", onError, { once: true });
+    });
+  }
+
+  function stopCapture() {
+    const hadSession = state.running || state.starting || state.stream;
+
+    state.startToken++;
+    state.running = false;
+    state.starting = false;
+
+    if (state.rafId !== null) {
+      cancelAnimationFrame(state.rafId);
+      state.rafId = null;
+    }
+
+    if (state.metricTimerId !== null) {
+      window.clearInterval(state.metricTimerId);
+      state.metricTimerId = null;
+    }
+
+    stopStream(state.stream);
+    state.stream = null;
+
+    dom.video.pause();
+    dom.video.srcObject = null;
+
+    clearCanvas(dom.overlay, dom.overlayCtx);
+    setRunningUi(false);
+    resetUi();
+
+    if (hadSession) log("Capture stopped and resources released", "warn");
+  }
+
+  function stopStream(stream) {
+    if (!stream) return;
+    for (const track of stream.getTracks()) track.stop();
+  }
+
+  function handleCameraError(err) {
+    state.running = false;
+    state.starting = false;
+    stopStream(state.stream);
+    state.stream = null;
+
+    setRunningUi(false);
+    resetUi();
+
+    const message = err && err.message ? err.message : "Unknown camera error";
+    setStatus("CAMERA ERROR");
+    log(`Camera unavailable: ${message}`, "error");
+  }
+
+  function setRunningUi(isRunning) {
+    dom.controlBtn.disabled = false;
+    dom.controlBtn.classList.toggle("running", isRunning);
+    dom.controlBtn.textContent = isRunning ? "■ STOP CAPTURE" : "▶ START WEBCAM";
+    dom.scanLine.hidden = !isRunning;
+    setStatus(isRunning ? "CAPTURING" : "IDLE");
+  }
+
+  function resetSamples() {
+    state.samples.pulse.length = 0;
+    state.samples.resp.length = 0;
+    state.samples.luma.length = 0;
+    state.samples.motion.length = 0;
+    state.samples.time.length = 0;
+    state.displayedBpm = null;
+    state.previousSample = null;
+    state.lastLoggedQuality = null;
+    state.metrics.pulse = null;
+    state.metrics.resp = null;
+    state.metrics.frequencyBins = new Array(CONFIG.frequencyBins).fill(0);
+    state.metrics.peakIndex = -1;
+  }
+
+  function resetUi() {
+    dom.bpmDisplay.hidden = true;
+    dom.breathingDisplay.hidden = true;
+    dom.qualityDisplay.hidden = true;
+
+    setText(dom.bpmValue, "--");
+    setText(dom.breathingValue, "--");
+    setText(dom.qualityValue, "--%");
+    setText(dom.fps, "-- FPS");
+    setText(dom.meanBpm, "--");
+    setText(dom.peakStability, "--");
+    setText(dom.peakFreq, "-- Hz");
+    setText(dom.qualityState, "NO SIGNAL");
+    setClass(dom.qualityState, "");
+    setText(dom.motionProxy, "--");
+    setText(dom.illumState, "--");
+    setText(dom.sampleRateLabel, `${CONFIG.targetSampleHz} Hz target`);
+    setText(dom.dominantHz, "-- Hz");
+    setText(dom.secondaryHz, "-- Hz");
+    setText(dom.respRate, "--/min");
+    setText(dom.respPattern, "COLLECTING");
+    setText(dom.respAmp, "--");
+    setText(dom.calibrationState, "WAITING");
+    setRoiStatus("WAITING", "");
+    updateFrequencyBars(new Array(CONFIG.frequencyBins).fill(0), -1);
+  }
+
+  function setStatus(text) {
+    dom.statusText.textContent = text;
+  }
+
+  function setText(el, text) {
+    el.textContent = text;
+  }
+
+  function setClass(el, className) {
+    el.className = `val ${className || ""}`.trim();
+  }
+
+  function setRoiStatus(text, className) {
+    for (const el of Object.values(dom.roiStatus)) {
+      setText(el, text);
+      setClass(el, className);
+    }
+  }
+
+  function log(message, type = "") {
+    const line = document.createElement("div");
+    const time = document.createElement("span");
+    const body = document.createElement("span");
+
+    line.className = "log-line";
+    time.className = "time";
+    body.className = type;
+
+    time.textContent = `[${new Date().toTimeString().slice(0, 8)}] `;
+    body.textContent = message;
+
+    line.appendChild(time);
+    line.appendChild(body);
+    dom.logArea.insertBefore(line, dom.logArea.firstChild);
+
+    while (dom.logArea.children.length > CONFIG.logLimit) {
+      dom.logArea.removeChild(dom.logArea.lastChild);
+    }
+  }
+
+  function loop(now) {
+    if (!state.running) return;
+
+    updateFps(now);
+
+    if (now - state.lastSampleAt >= 1000 / CONFIG.targetSampleHz) {
+      const sample = sampleVideoFrame(now);
+      if (sample) appendSample(sample);
+      state.lastSampleAt = now;
+    }
+
+    if (now - state.lastRenderAt >= CONFIG.renderIntervalMs) {
+      render();
+      state.lastRenderAt = now;
+    }
+
+    state.rafId = requestAnimationFrame(loop);
+  }
+
+  function updateFps(now) {
+    state.fpsFrames++;
+
+    if (now - state.lastFpsAt >= 1000) {
+      setText(dom.fps, `${state.fpsFrames} FPS`);
+      state.fpsFrames = 0;
+      state.lastFpsAt = now;
+    }
+  }
+
+  function sampleVideoFrame(now) {
+    if (!dom.video.videoWidth || !dom.video.videoHeight) return null;
+
+    analyzerCtx.drawImage(dom.video, 0, 0, CONFIG.analyzerWidth, CONFIG.analyzerHeight);
+
+    let imageData;
+    try {
+      imageData = analyzerCtx.getImageData(0, 0, CONFIG.analyzerWidth, CONFIG.analyzerHeight).data;
+    } catch {
+      log("Unable to read video pixels from canvas", "error");
+      stopCapture();
+      return null;
+    }
+
+    const faceBox = getFaceGuideBox(CONFIG.analyzerWidth, CONFIG.analyzerHeight);
+    let totalR = 0;
+    let totalG = 0;
+    let totalB = 0;
+    let totalPixels = 0;
+
+    for (const roi of ROIS) {
+      const rect = roiToRect(roi, faceBox);
+      if (!isValidRect(rect, CONFIG.analyzerWidth, CONFIG.analyzerHeight)) continue;
+
+      const step = 2;
+      for (let y = rect.y; y < rect.y + rect.h; y += step) {
+        for (let x = rect.x; x < rect.x + rect.w; x += step) {
+          const idx = (y * CONFIG.analyzerWidth + x) * 4;
+          totalR += imageData[idx];
+          totalG += imageData[idx + 1];
+          totalB += imageData[idx + 2];
+          totalPixels++;
+        }
+      }
+    }
+
+    if (totalPixels === 0) return null;
+
+    const r = totalR / totalPixels;
+    const g = totalG / totalPixels;
+    const b = totalB / totalPixels;
+    const sum = Math.max(1, r + g + b);
+
+    const rn = r / sum;
+    const gn = g / sum;
+    const bn = b / sum;
+
+    const luma = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+    // Simple color-difference signal. This is not a full CHROM implementation.
+    const pulseRaw = gn - (rn + bn) / 2;
+
+    // Slow brightness changes can contain breathing-like motion, but this is experimental.
+    const respRaw = luma;
+
+    const motion = state.previousSample
+      ? Math.abs(luma - state.previousSample.luma) / 255 + Math.abs(pulseRaw - state.previousSample.pulseRaw) * 20
+      : 0;
+
+    state.previousSample = { luma, pulseRaw };
+
+    return {
+      time: now,
+      pulse: pulseRaw,
+      resp: respRaw,
+      luma,
+      motion
+    };
+  }
+
+  function appendSample(sample) {
+    pushBounded(state.samples.time, sample.time, CONFIG.maxSamples);
+    pushBounded(state.samples.pulse, sample.pulse, CONFIG.maxSamples);
+    pushBounded(state.samples.resp, sample.resp, CONFIG.maxSamples);
+    pushBounded(state.samples.luma, sample.luma, CONFIG.maxSamples);
+    pushBounded(state.samples.motion, sample.motion, CONFIG.maxSamples);
+  }
+
+  function pushBounded(arr, value, maxLen) {
+    arr.push(value);
+    if (arr.length > maxLen) arr.shift();
+  }
+
+  function render() {
+    resizeCanvasToDisplay(dom.overlay);
+    resizeCanvasToDisplay(dom.ppgCanvas);
+    resizeCanvasToDisplay(dom.respCanvas);
+
+    drawOverlay();
+    drawWaveform({
+      canvas: dom.ppgCanvas,
+      ctx: dom.ppgCtx,
+      raw: state.samples.pulse,
+      color: COLORS.green,
+      grid: COLORS.gridGreen,
+      band: CONFIG.pulseBand,
+      maxPoints: 240
+    });
+
+    drawWaveform({
+      canvas: dom.respCanvas,
+      ctx: dom.respCtx,
+      raw: state.samples.resp,
+      color: COLORS.cyan,
+      grid: COLORS.gridCyan,
+      band: CONFIG.respBand,
+      maxPoints: 300
+    });
+  }
+
+  function resizeCanvasToDisplay(canvas) {
+    const rect = canvas.getBoundingClientRect();
+    if (!rect.width || !rect.height) return false;
+
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const width = Math.round(rect.width * dpr);
+    const height = Math.round(rect.height * dpr);
+
+    if (canvas.width !== width || canvas.height !== height) {
+      canvas.width = width;
+      canvas.height = height;
+      return true;
+    }
+
+    return false;
+  }
+
+  function drawOverlay() {
+    const ctx = dom.overlayCtx;
+    const width = dom.overlay.width;
+    const height = dom.overlay.height;
+
+    if (!width || !height) return;
+
+    ctx.clearRect(0, 0, width, height);
+
+    if (!state.running) return;
+
+    const faceBox = getFaceGuideBox(width, height);
+    const quality = state.metrics.pulse ? state.metrics.pulse.quality : "collecting";
+    const color = quality === "usable" ? COLORS.green : quality === "unstable" ? COLORS.amber : COLORS.cyan;
+
+    ctx.strokeStyle = color + "55";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.strokeRect(faceBox.x, faceBox.y, faceBox.w, faceBox.h);
+    ctx.setLineDash([]);
+
+    ctx.fillStyle = color;
+    ctx.font = "10px Courier New";
+    ctx.fillText("FIXED_FACE_GUIDE", faceBox.x, Math.max(12, faceBox.y - 5));
+
+    for (const roi of ROIS) {
+      const rect = roiToRect(roi, faceBox);
+
+      ctx.strokeStyle = roi.color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(rect.x, rect.y, rect.w, rect.h);
+
+      ctx.fillStyle = roi.color + "22";
+      ctx.fillRect(rect.x, rect.y, rect.w, rect.h);
+
+      ctx.fillStyle = roi.color;
+      ctx.font = "bold 10px Courier New";
+      ctx.fillText(roi.label, rect.x, Math.max(12, rect.y - 4));
+
+      const cs = 5;
+      ctx.fillRect(rect.x - 1, rect.y - 1, cs, cs);
+      ctx.fillRect(rect.x + rect.w - cs + 1, rect.y - 1, cs, cs);
+      ctx.fillRect(rect.x - 1, rect.y + rect.h - cs + 1, cs, cs);
+      ctx.fillRect(rect.x + rect.w - cs + 1, rect.y + rect.h - cs + 1, cs, cs);
+    }
+  }
+
+  function getFaceGuideBox(width, height) {
+    // Hook point: a real face detector could return a face box here.
+    // The current demo intentionally uses a fixed guide and labels it honestly.
+    const faceW = Math.min(width * 0.55, height * 0.75);
+    const faceH = faceW * 1.25;
+    return {
+      x: (width - faceW) / 2,
+      y: (height - faceH) / 2 - height * 0.02,
+      w: faceW,
+      h: faceH
+    };
+  }
+
+  function roiToRect(roi, faceBox) {
+    return {
+      x: Math.floor(faceBox.x + roi.x * faceBox.w),
+      y: Math.floor(faceBox.y + roi.y * faceBox.h),
+      w: Math.max(1, Math.floor(roi.w * faceBox.w)),
+      h: Math.max(1, Math.floor(roi.h * faceBox.h))
+    };
+  }
+
+  function isValidRect(rect, width, height) {
+    return rect.x >= 0 &&
+      rect.y >= 0 &&
+      rect.w > 0 &&
+      rect.h > 0 &&
+      rect.x + rect.w <= width &&
+      rect.y + rect.h <= height;
+  }
+
+  function drawWaveform({ canvas, ctx, raw, color, grid, band, maxPoints }) {
+    const width = canvas.width;
+    const height = canvas.height;
+
+    if (!width || !height) return;
+
+    ctx.fillStyle = "#000";
+    ctx.fillRect(0, 0, width, height);
+    drawGrid(ctx, width, height, grid);
+
+    if (raw.length < 10) return;
+
+    const fs = estimateSampleRate();
+    const processed = bandpassApprox(raw, band.low, band.high, fs);
+    const recent = processed.slice(-Math.min(processed.length, maxPoints));
+    const scaled = scaleSeries(recent, height);
+
+    if (scaled.length < 2) return;
+
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+
+    for (let i = 0; i < scaled.length; i++) {
+      const x = scaled.length === 1 ? 0 : (i / (scaled.length - 1)) * width;
+      const y = scaled[i];
+      if (i === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+  }
+
+  function drawGrid(ctx, width, height, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 1;
+
+    for (let i = 0; i <= 10; i++) {
+      const x = (i / 10) * width;
+      ctx.beginPath();
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, height);
+      ctx.stroke();
+    }
+
+    for (let i = 0; i <= 4; i++) {
+      const y = (i / 4) * height;
+      ctx.beginPath();
+      ctx.moveTo(0, y);
+      ctx.lineTo(width, y);
+      ctx.stroke();
+    }
+  }
+
+  function scaleSeries(series, height) {
+    let min = Infinity;
+    let max = -Infinity;
+
+    for (const value of series) {
+      if (value < min) min = value;
+      if (value > max) max = value;
+    }
+
+    const range = max - min || 1;
+    return series.map(value => {
+      const normalized = (value - min) / range;
+      return height - normalized * height * 0.86 - height * 0.07;
+    });
+  }
+
+  function updateMetrics() {
+    if (!state.running) return;
+
+    const fs = estimateSampleRate();
+    const pulse = estimatePulse();
+    const resp = estimateRespiration();
+    const motion = averageRecent(state.samples.motion, 60);
+    const illum = estimateIlluminationState();
+
+    state.metrics.pulse = pulse;
+    state.metrics.resp = resp;
+
+    setText(dom.sampleRateLabel, `${fs.toFixed(1)} Hz measured`);
+    updateCalibrationState();
+
+    updateQualityUi(pulse, motion, illum);
+    updatePulseUi(pulse);
+    updateRespUi(resp);
+    updateFrequencyUi(pulse, fs);
+    refreshExplanation();
+  }
+
+  function updateCalibrationState() {
+    const count = state.samples.pulse.length;
+    if (count === 0) {
+      setText(dom.calibrationState, "WAITING");
+      setClass(dom.calibrationState, "");
+      return;
+    }
+
+    if (count < CONFIG.minPulseSamples) {
+      const percent = Math.min(99, Math.round((count / CONFIG.minPulseSamples) * 100));
+      setText(dom.calibrationState, `${percent}%`);
+      setClass(dom.calibrationState, "amber");
+      return;
+    }
+
+    setText(dom.calibrationState, "READY");
+    setClass(dom.calibrationState, "green");
+  }
+
+  function updateQualityUi(pulse, motion, illum) {
+    const quality = pulse ? pulse.quality : "no_signal";
+    const label = qualityLabel(quality);
+    const className = qualityClass(quality);
+
+    setText(dom.qualityState, label);
+    setClass(dom.qualityState, className);
+    setText(dom.motionProxy, motionLabel(motion));
+    setClass(dom.motionProxy, motion > 0.055 ? "amber" : "green");
+    setText(dom.illumState, illum.label);
+    setClass(dom.illumState, illum.className);
+
+    if (state.samples.pulse.length >= CONFIG.minPulseSamples) {
+      dom.qualityDisplay.hidden = false;
+      setText(dom.qualityValue, `${Math.round(pulse.score)}%`);
+    } else {
+      dom.qualityDisplay.hidden = true;
+    }
+
+    if (quality !== state.lastLoggedQuality && state.samples.pulse.length >= 30) {
+      log(`Signal quality: ${label}`, quality === "usable" ? "" : "warn");
+      state.lastLoggedQuality = quality;
+    }
+  }
+
+  function updatePulseUi(pulse) {
+    if (!pulse || pulse.bpm === null || state.samples.pulse.length < CONFIG.minPulseSamples) {
+      dom.bpmDisplay.hidden = true;
+      setText(dom.meanBpm, "--");
+      setText(dom.peakStability, "--");
+      setText(dom.peakFreq, "-- Hz");
+      return;
+    }
+
+    if (state.displayedBpm === null) {
+      state.displayedBpm = pulse.bpm;
+    } else {
+      state.displayedBpm =
+        state.displayedBpm * (1 - CONFIG.bpmSmoothingAlpha) +
+        pulse.bpm * CONFIG.bpmSmoothingAlpha;
+    }
+
+    const bpm = Math.round(state.displayedBpm);
+    const beatSeconds = Math.max(0.33, Math.min(1.5, 60 / bpm));
+
+    dom.bpmDisplay.hidden = false;
+    setText(dom.bpmValue, String(bpm));
+    setText(dom.meanBpm, `${bpm} BPM est.`);
+    setText(dom.peakFreq, `${(bpm / 60).toFixed(2)} Hz`);
+    setText(dom.peakStability, `${Math.round(100 - pulse.intervalCv * 100)}%`);
+    dom.bpmCircle.style.animationDuration = `${beatSeconds}s`;
+  }
+
+  function updateRespUi(resp) {
+    if (!resp || resp.rate === null || state.samples.resp.length < CONFIG.minRespSamples) {
+      dom.breathingDisplay.hidden = true;
+      setText(dom.respRate, "--/min");
+      setText(dom.respPattern, state.samples.resp.length < CONFIG.minRespSamples ? "COLLECTING" : "UNSTABLE");
+      setClass(dom.respPattern, "amber");
+      setText(dom.respAmp, "--");
+      return;
+    }
+
+    dom.breathingDisplay.hidden = false;
+    setText(dom.breathingValue, String(resp.rate));
+    setText(dom.respRate, `${resp.rate}/min est.`);
+    setText(dom.respPattern, resp.quality);
+    setClass(dom.respPattern, resp.quality === "USABLE" ? "green" : "amber");
+    setText(dom.respAmp, resp.amplitudeLabel);
+  }
+
+  function updateFrequencyUi(pulse, fs) {
+    if (state.samples.pulse.length < CONFIG.minPulseSamples) {
+      updateFrequencyBars(new Array(CONFIG.frequencyBins).fill(0), -1);
+      setText(dom.dominantHz, "-- Hz");
+      setText(dom.secondaryHz, "-- Hz");
+      return;
+    }
+
+    const filtered = bandpassApprox(state.samples.pulse, 0.5, 3.5, fs);
+    const scan = frequencyScan(filtered, fs, 0.5, 3.5, CONFIG.frequencyBins);
+    state.metrics.frequencyBins = scan.bins;
+    state.metrics.peakIndex = scan.peakIndex;
+
+    updateFrequencyBars(scan.bins, scan.peakIndex);
+
+    if (pulse && pulse.bpm !== null) {
+      setText(dom.dominantHz, `${(pulse.bpm / 60).toFixed(2)} Hz`);
+    } else {
+      setText(dom.dominantHz, scan.peakHz ? `${scan.peakHz.toFixed(2)} Hz` : "-- Hz");
+    }
+
+    setText(dom.secondaryHz, scan.secondaryHz ? `${scan.secondaryHz.toFixed(2)} Hz` : "-- Hz");
+  }
+
+  function createFrequencyBars() {
+    dom.barChart.innerHTML = "";
+    dom.frequencyBars.length = 0;
+
+    for (let i = 0; i < CONFIG.frequencyBins; i++) {
+      const bar = document.createElement("div");
+      bar.className = "bar explain-target";
+      bar.setAttribute("data-explain", "freq-bar");
+      bar.setAttribute("data-bar-index", String(i));
+      bar.style.height = "2px";
+      dom.barChart.appendChild(bar);
+      dom.frequencyBars.push(bar);
+    }
+  }
+
+  function updateFrequencyBars(values, peakIndex) {
+    const max = Math.max(1e-9, ...values);
+
+    for (let i = 0; i < dom.frequencyBars.length; i++) {
+      const value = values[i] || 0;
+      const height = Math.max(2, (value / max) * 72);
+      const bar = dom.frequencyBars[i];
+
+      bar.style.height = `${height}px`;
+      bar.style.background = i === peakIndex ? COLORS.red : COLORS.cyan;
+    }
+  }
+
+  function estimatePulse() {
+    const raw = state.samples.pulse;
+    const time = state.samples.time;
+
+    if (raw.length < 30) {
+      return { bpm: null, score: 0, quality: "no_signal", reason: "not_enough_samples" };
+    }
+
+    if (raw.length < CONFIG.minPulseSamples) {
+      return { bpm: null, score: 0, quality: "weak", reason: "collecting" };
+    }
+
+    const fs = estimateSampleRate();
+    const filtered = bandpassApprox(raw, CONFIG.pulseBand.low, CONFIG.pulseBand.high, fs);
+    const signalStd = stddev(filtered);
+
+    if (signalStd < 0.00025) {
+      return { bpm: null, score: 20, quality: "weak", reason: "low_amplitude" };
+    }
+
+    const peaks = findPeaks(filtered, fs, {
+      minHz: CONFIG.pulseBand.low,
+      maxHz: CONFIG.pulseBand.high,
+      thresholdStd: 0.35
+    });
+
+    if (peaks.length < 4) {
+      return { bpm: null, score: 25, quality: "weak", reason: "not_enough_peaks" };
+    }
+
+    const intervals = [];
+
+    for (let i = 1; i < peaks.length; i++) {
+      const dt = (time[peaks[i]] - time[peaks[i - 1]]) / 1000;
+      if (dt >= 0.33 && dt <= 1.5) intervals.push(dt);
+    }
+
+    if (intervals.length < 3) {
+      return { bpm: null, score: 25, quality: "unstable", reason: "invalid_intervals" };
+    }
+
+    const intervalMean = mean(intervals);
+    const intervalCv = stddev(intervals) / Math.max(0.001, intervalMean);
+    const bpm = 60 / median(intervals);
+
+    if (bpm < 40 || bpm > 180) {
+      return { bpm: null, score: 15, quality: "unstable", reason: "out_of_range" };
+    }
+
+    const motionAvg = averageRecent(state.samples.motion, 60);
+    const stabilityScore = 100 * (1 - clamp(intervalCv / 0.22, 0, 1));
+    const peakScore = 100 * clamp((peaks.length - 3) / 6, 0, 1);
+    const amplitudeScore = 100 * clamp(signalStd / 0.003, 0, 1);
+    const motionPenalty = 100 * clamp(motionAvg / 0.12, 0, 1);
+
+    const score = clamp(
+      stabilityScore * 0.50 + peakScore * 0.20 + amplitudeScore * 0.30 - motionPenalty * 0.35,
+      0,
+      100
+    );
+
+    let quality = "weak";
+    if (motionAvg > 0.075 || intervalCv > 0.25) quality = "unstable";
+    else if (score >= 60) quality = "usable";
+    else if (score < 35) quality = "unstable";
+
+    return {
+      bpm: Math.round(bpm),
+      score,
+      quality,
+      intervalCv,
+      peaks,
+      filtered,
+      reason: "estimated"
+    };
+  }
+
+  function estimateRespiration() {
+    const raw = state.samples.resp;
+    const time = state.samples.time;
+
+    if (raw.length < CONFIG.minRespSamples) {
+      return { rate: null, quality: "COLLECTING", amplitudeLabel: "--" };
+    }
+
+    const fs = estimateSampleRate();
+    const filtered = bandpassApprox(raw, CONFIG.respBand.low, CONFIG.respBand.high, fs);
+    const amp = stddev(filtered);
+
+    if (amp < 0.2) {
+      return { rate: null, quality: "WEAK", amplitudeLabel: "LOW" };
+    }
+
+    const peaks = findPeaks(filtered, fs, {
+      minHz: CONFIG.respBand.low,
+      maxHz: CONFIG.respBand.high,
+      thresholdStd: 0.15
+    });
+
+    if (peaks.length < 3) {
+      return { rate: null, quality: "UNSTABLE", amplitudeLabel: amplitudeLabel(amp) };
+    }
+
+    const intervals = [];
+
+    for (let i = 1; i < peaks.length; i++) {
+      const dt = (time[peaks[i]] - time[peaks[i - 1]]) / 1000;
+      if (dt >= 1.5 && dt <= 10) intervals.push(dt);
+    }
+
+    if (intervals.length < 2) {
+      return { rate: null, quality: "UNSTABLE", amplitudeLabel: amplitudeLabel(amp) };
+    }
+
+    const rate = 60 / median(intervals);
+
+    if (rate < 6 || rate > 40) {
+      return { rate: null, quality: "UNSTABLE", amplitudeLabel: amplitudeLabel(amp) };
+    }
+
+    const cv = stddev(intervals) / Math.max(0.001, mean(intervals));
+
+    return {
+      rate: Math.round(rate),
+      quality: cv < 0.35 ? "USABLE" : "VARIABLE",
+      amplitudeLabel: amplitudeLabel(amp)
+    };
+  }
+
+  function bandpassApprox(series, lowHz, highHz, fs) {
+    // Transparent approximation, not a true digital bandpass filter.
+    // 1. Remove the mean.
+    // 2. Remove slow drift with a long moving average.
+    // 3. Smooth fast noise with a shorter moving average.
+    const centered = detrend(series);
+    const highPassed = subtractMovingAverage(centered, Math.max(1, Math.round(fs / lowHz)));
+    return movingAverage(highPassed, Math.max(1, Math.round(fs / highHz / 2)));
+  }
+
+  function detrend(series) {
+    const m = mean(series);
+    return series.map(value => value - m);
+  }
+
+  function subtractMovingAverage(series, windowSize) {
+    const avg = movingAverage(series, windowSize);
+    return series.map((value, index) => value - avg[index]);
+  }
+
+  function movingAverage(series, windowSize) {
+    if (series.length === 0) return [];
+
+    const radius = Math.max(1, Math.floor(windowSize / 2));
+    const prefix = new Array(series.length + 1).fill(0);
+
+    for (let i = 0; i < series.length; i++) {
+      prefix[i + 1] = prefix[i] + series[i];
+    }
+
+    return series.map((_, index) => {
+      const start = Math.max(0, index - radius);
+      const end = Math.min(series.length, index + radius + 1);
+      return (prefix[end] - prefix[start]) / (end - start);
+    });
+  }
+
+  function findPeaks(series, fs, options) {
+    const minDistance = Math.max(1, Math.floor(fs / options.maxHz));
+    const threshold = mean(series) + stddev(series) * options.thresholdStd;
+    const peaks = [];
+
+    for (let i = 1; i < series.length - 1; i++) {
+      const isPeak = series[i] > series[i - 1] &&
+        series[i] >= series[i + 1] &&
+        series[i] > threshold;
+
+      if (!isPeak) continue;
+
+      const lastIndex = peaks[peaks.length - 1];
+
+      if (lastIndex === undefined || i - lastIndex >= minDistance) {
+        peaks.push(i);
+      } else if (series[i] > series[lastIndex]) {
+        peaks[peaks.length - 1] = i;
+      }
+    }
+
+    return peaks;
+  }
+
+  function frequencyScan(series, fs, lowHz, highHz, bins) {
+    const values = new Array(bins).fill(0);
+    const n = series.length;
+
+    if (n < 2) {
+      return { bins: values, peakIndex: -1, peakHz: null, secondaryHz: null };
+    }
+
+    for (let bin = 0; bin < bins; bin++) {
+      const freq = lowHz + (bin / Math.max(1, bins - 1)) * (highHz - lowHz);
+      let re = 0;
+      let im = 0;
+
+      for (let i = 0; i < n; i++) {
+        const t = i / fs;
+        const windowValue = 0.54 - 0.46 * Math.cos((2 * Math.PI * i) / Math.max(1, n - 1));
+        const sample = series[i] * windowValue;
+        re += sample * Math.cos(2 * Math.PI * freq * t);
+        im -= sample * Math.sin(2 * Math.PI * freq * t);
+      }
+
+      values[bin] = Math.sqrt(re * re + im * im);
+    }
+
+    let peakIndex = -1;
+    let secondaryIndex = -1;
+
+    for (let i = 0; i < values.length; i++) {
+      if (peakIndex === -1 || values[i] > values[peakIndex]) {
+        secondaryIndex = peakIndex;
+        peakIndex = i;
+      } else if (
+        Math.abs(i - peakIndex) > 2 &&
+        (secondaryIndex === -1 || values[i] > values[secondaryIndex])
+      ) {
+        secondaryIndex = i;
+      }
+    }
+
+    const toHz = index => index < 0
+      ? null
+      : lowHz + (index / Math.max(1, bins - 1)) * (highHz - lowHz);
+
+    return {
+      bins: values,
+      peakIndex,
+      peakHz: toHz(peakIndex),
+      secondaryHz: toHz(secondaryIndex)
+    };
+  }
+
+  function estimateSampleRate() {
+    const t = state.samples.time;
+    if (t.length < 2) return CONFIG.targetSampleHz;
+
+    const seconds = (t[t.length - 1] - t[0]) / 1000;
+    if (seconds <= 0) return CONFIG.targetSampleHz;
+
+    return clamp((t.length - 1) / seconds, 5, 60);
+  }
+
+  function estimateIlluminationState() {
+    if (state.samples.luma.length < 30) {
+      return { label: "--", className: "" };
+    }
+
+    const variation = stddev(state.samples.luma.slice(-90));
+
+    if (variation < 3) return { label: "STABLE", className: "green" };
+    if (variation < 10) return { label: "VARIABLE", className: "amber" };
+    return { label: "UNSTABLE", className: "red" };
+  }
+
+  function qualityLabel(value) {
+    if (value === "usable") return "USABLE";
+    if (value === "weak") return "WEAK";
+    if (value === "unstable") return "UNSTABLE";
+    return "NO SIGNAL";
+  }
+
+  function qualityClass(value) {
+    if (value === "usable") return "green";
+    if (value === "weak") return "amber";
+    if (value === "unstable") return "red";
+    return "";
+  }
+
+  function motionLabel(value) {
+    if (!Number.isFinite(value)) return "--";
+    if (value > 0.075) return "HIGH";
+    if (value > 0.04) return "MED";
+    return "LOW";
+  }
+
+  function amplitudeLabel(value) {
+    if (value > 4) return "HIGH";
+    if (value > 1) return "NORMAL";
+    return "LOW";
+  }
+
+  function clearCanvas(canvas, ctx) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+
+  function mean(values) {
+    if (!values.length) return 0;
+    return values.reduce((sum, value) => sum + value, 0) / values.length;
+  }
+
+  function median(values) {
+    if (!values.length) return 0;
+    const sorted = values.slice().sort((a, b) => a - b);
+    const mid = Math.floor(sorted.length / 2);
+    return sorted.length % 2
+      ? sorted[mid]
+      : (sorted[mid - 1] + sorted[mid]) / 2;
+  }
+
+  function stddev(values) {
+    if (values.length < 2) return 0;
+    const m = mean(values);
+    const variance = mean(values.map(value => (value - m) ** 2));
+    return Math.sqrt(variance);
+  }
+
+  function averageRecent(values, count) {
+    if (!values.length) return 0;
+    return mean(values.slice(-Math.min(values.length, count)));
+  }
+
+  function clamp(value, min, max) {
+    return Math.max(min, Math.min(max, value));
+  }
+
+  function initExplain() {
+    try {
+      explainHintDismissed = window.localStorage.getItem("bv.explainHintSeen") === "1";
+    } catch (_) {
+      explainHintDismissed = false;
+    }
+
+    if (!explainHintDismissed) {
+      dom.explainHint.hidden = false;
+    }
+
+    dom.explainCard.addEventListener("click", event => event.stopPropagation());
+    dom.explainClose.addEventListener("click", closeExplanation);
+    dom.explainHintClose.addEventListener("click", dismissHint);
+
+    document.addEventListener("click", onExplainDocumentClick);
+    document.addEventListener("keydown", onExplainKeyDown);
+    window.addEventListener("resize", onExplainResize);
+  }
+
+  function onExplainDocumentClick(event) {
+    const target = event.target.closest("[data-explain]");
+
+    if (target) {
+      const key = target.getAttribute("data-explain");
+      const extra = {};
+      const barIndex = target.getAttribute("data-bar-index");
+      if (barIndex !== null) extra.barIndex = parseInt(barIndex, 10);
+      openExplanation(key, target, extra);
+      dismissHint();
+      event.stopPropagation();
+      return;
+    }
+
+    if (explainOpenKey && !dom.explainCard.contains(event.target)) {
+      closeExplanation();
+    }
+  }
+
+  function onExplainKeyDown(event) {
+    if (event.key === "Escape" && explainOpenKey) closeExplanation();
+  }
+
+  function onExplainResize() {
+    if (!explainOpenKey) return;
+    const selector = explainOpenExtra && explainOpenExtra.barIndex != null
+      ? `[data-explain="${explainOpenKey}"][data-bar-index="${explainOpenExtra.barIndex}"]`
+      : `[data-explain="${explainOpenKey}"]`;
+    const target = document.querySelector(selector);
+    if (target) positionCard(target);
+  }
+
+  function openExplanation(key, targetEl, extra) {
+    const entry = EXPLAIN[key];
+    if (!entry) return;
+
+    explainOpenKey = key;
+    explainOpenExtra = extra || null;
+
+    dom.explainTitle.textContent = entry.title;
+    dom.explainBody.innerHTML = renderExplainBody(entry, extra);
+    dom.explainCard.style.left = "-9999px";
+    dom.explainCard.style.top = "-9999px";
+    dom.explainCard.hidden = false;
+    positionCard(targetEl);
+  }
+
+  function renderExplainBody(entry, extra) {
+    try {
+      return entry.body(extra || {}) || "";
+    } catch (err) {
+      const message = err && err.message ? err.message : "unknown error";
+      return `<p>Could not render explanation: ${message}</p>`;
+    }
+  }
+
+  function refreshExplanation() {
+    if (!explainOpenKey) return;
+    const entry = EXPLAIN[explainOpenKey];
+    if (!entry) return;
+    dom.explainBody.innerHTML = renderExplainBody(entry, explainOpenExtra);
+  }
+
+  function closeExplanation() {
+    if (!explainOpenKey) return;
+    explainOpenKey = null;
+    explainOpenExtra = null;
+    dom.explainCard.hidden = true;
+  }
+
+  function positionCard(targetEl) {
+    const rect = targetEl.getBoundingClientRect();
+    const card = dom.explainCard;
+    const cardRect = card.getBoundingClientRect();
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    const gap = 8;
+    const margin = 4;
+
+    let left = rect.right + gap;
+    if (left + cardRect.width > viewportW - margin) {
+      left = rect.left - cardRect.width - gap;
+    }
+    if (left < margin) left = margin;
+    if (left + cardRect.width > viewportW - margin) {
+      left = viewportW - cardRect.width - margin;
+    }
+
+    let top = rect.top;
+    if (top + cardRect.height > viewportH - margin) {
+      top = viewportH - cardRect.height - margin;
+    }
+    if (top < margin) top = margin;
+
+    card.style.left = `${left}px`;
+    card.style.top = `${top}px`;
+  }
+
+  function dismissHint() {
+    if (explainHintDismissed) return;
+    explainHintDismissed = true;
+    if (dom.explainHint) dom.explainHint.hidden = true;
+    try { window.localStorage.setItem("bv.explainHintSeen", "1"); } catch (_) {}
+  }
+
+  window.addEventListener("beforeunload", stopCapture);
+  init();
+})();
+</script>
+</body>
+</html>
